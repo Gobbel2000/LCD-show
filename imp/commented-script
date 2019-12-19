@@ -1,0 +1,109 @@
+#!/bin/bash
+
+sudo ./system_backup.sh
+
+root_dev=`grep -oPr "root=[^\s]*" /boot/cmdline.txt | awk -F= '{printf $NF}'`
+
+
+
+# Only difference between config-noobs-nomal and *nomal is:
+# hdmi_force_hotplug=1
+# in *noobs-nomal.  This overwrites the hdmi hotplug signal to be
+# always on, which might be needed, might be not needed.
+# This is even added to *nomal so it is completely unneccessary
+# to have both files.
+
+if test "$root_dev" = "/dev/mmcblk0p7";then
+sudo cp -rf ./boot/config-noobs-nomal.txt ./boot/config.txt.bak
+else
+sudo cp -rf ./boot/config-nomal.txt ./boot/config.txt.bak
+sudo echo "hdmi_force_hotplug=1" >> ./boot/config.txt.bak
+fi
+
+
+
+# http://www.lcdwiki.com/7inch_HDMI_Display-C
+# This site recommends the following options from here:
+
+# Not in list above
+# https://www.raspberrypi.org/documentation/configuration/device-tree.md#part4.6
+sudo echo "dtparam=i2c_arm=on" >> ./boot/config.txt.bak
+sudo echo "dtparam=spi=on" >> ./boot/config.txt.bak
+sudo echo "enable_uart=1" >> ./boot/config.txt.bak
+
+# YES, in list above
+sudo echo "display_rotate=0" >> ./boot/config.txt.bak
+sudo echo "max_usb_current=1" >> ./boot/config.txt.bak
+sudo echo "config_hdmi_boost=7" >> ./boot/config.txt.bak 
+# Questionable, useful for long HDMI cables.
+# Ignored on RPI 4!
+
+sudo echo "hdmi_group=2" >> ./boot/config.txt.bak
+sudo echo "hdmi_mode=1" >> ./boot/config.txt.bak
+# Unnecessary, not in list from above
+
+sudo echo "hdmi_mode=87" >> ./boot/config.txt.bak
+sudo echo "hdmi_drive=1" >> ./boot/config.txt.bak
+# Disables sound
+
+sudo echo "hdmi_cvt 1024 600 60 6 0 0 0" >> ./boot/config.txt.bak
+# Very important
+
+sudo cp -rf ./boot/config.txt.bak /boot/config.txt
+#sudo cp -rf ./boot/config-7C-1024x600.txt /boot/config.txt
+
+
+
+# Only makes root drive either mmcblk0p7 or mmcblk0p2
+# Mainly to change some fonts?
+# Probably unnecessary
+if test "$root_dev" = "/dev/mmcblk0p7";then
+sudo cp ./usr/cmdline.txt-noobs /boot/cmdline.txt
+else
+sudo cp ./usr/cmdline.txt /boot/
+fi
+
+
+
+sudo cp ./usr/inittab /etc/
+
+
+sudo cp -rf ./usr/99-fbturbo.conf-HDMI /usr/share/X11/xorg.conf.d/99-fbturbo.conf
+
+
+# Belongs to the top
+if [ ! -d /etc/X11/xorg.conf.d ]; then
+sudo mkdir /etc/X11/xorg.conf.d
+fi
+
+
+# This might not change anything
+# Pretty sure this is identical to the system default at
+# /usr/share/X11/xorg.conf.d/40-libinput.conf
+sudo cp ./usr/40-libinput.conf-0 /etc/X11/xorg.conf.d/40-libinput.conf
+
+
+
+sudo touch ./.have_installed
+echo "hdmi:capacity:7C-1024x600:0:1024:600" > ./.have_installed
+sudo sync
+sudo sync
+sleep 1
+
+
+# Rotation script basically changes the display_rotate and 
+# hdmi_cvt value in config.txt
+# And rotates the touch screen by changing the
+# CalibrationMatrix in 40-libinput.conf
+# Still overwrites that config file but at least config.txt
+# is changed inplace.
+if [ $# -eq 1 ]; then
+sudo ./rotate.sh $1
+elif [ $# -gt 1 ]; then
+echo "Too many parameters"
+fi
+
+
+# Just don't 
+echo "reboot now"
+sudo reboot
